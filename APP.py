@@ -2,9 +2,9 @@ import streamlit as st
 import requests
 import google.generativeai as genai
 
-# --- API Keys (replace with actual keys) ---
-HF_API_KEY = st.secrets["HF_API_KEY"]  # Store this in Streamlit secrets
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]  # Store this in Streamlit secrets
+# --- API Keys (replace with actual keys directly here) ---
+HF_API_KEY = "YOUR_HUGGINGFACE_API_KEY"
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
 
 # --- Hugging Face LEGAL-BERT API Setup ---
 LEGAL_BERT_API_URL = "https://api-inference.huggingface.co/models/nlpaueb/legal-bert-base-uncased"
@@ -60,7 +60,7 @@ if uploaded_file:
         st.subheader("✅ Gemini AI Compliance Summary")
         st.write(gemini_summary)
 
-        # Simple Risk Warning based on LEGAL-BERT (Optional, for Demo)
+        # Simple Risk Warning based on LEGAL-BERT (Optional)
         if isinstance(bert_analysis, list):
             risk_labels = [item['label'] for item in bert_analysis]
             risk_scores = [item['score'] for item in bert_analysis if item['label'] == "Non-Compliant"]
