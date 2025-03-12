@@ -6,15 +6,9 @@ import google.generativeai as genai
 import re
 import json
 from datetime import datetime
-
-# ---------------------------
-# Project: LexiGuardAI
-# For: Google Solution Challenge 2025
-# Track: Content Rights Management for OTT Platforms (e.g., Aha)
-# Target: CXS50 Harvard Offline Students (Avg. GPA 4.5)
-# Objective: Automate content licensing, risk assessment, and compliance tracking
-# Designed to reflect coding practices of top 7% global developers
-# ---------------------------
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 st.set_page_config(page_title="LexiGuardAI - AI Contract Analyzer", layout="wide")
 
@@ -27,7 +21,6 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("models/gemini-1.5-flash")
 
-# Utility: Extract text from uploaded contract
 @st.cache_data(show_spinner=False)
 def extract_text(file):
     try:
@@ -44,12 +37,11 @@ def extract_text(file):
     except Exception as e:
         return f"Error reading file: {e}"
 
-# Utility: Clean and split into meaningful sentences
 def split_sentences(text):
     text = re.sub(r"\n+", " ", text)
-    return [s.strip() for s in re.split(r'(?<=[.?!])\s+', text) if len(s.strip()) > 5]
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    return [s.strip() for s in sentences if len(s.strip().split()) > 4]
 
-# Prompt engineering to simulate LegalBERT behavior with Gemini
 LEGAL_ANALYSIS_PROMPT = """
 You are a legal AI assistant trained to review contracts.
 Analyze each sentence for:
@@ -59,7 +51,6 @@ Analyze each sentence for:
 Return ONLY valid JSON array: [{"sentence": str, "category": str, "risk": str, "reason": str}, ...]
 """
 
-# Gemini-powered clause analysis
 def analyze_sentences_with_gemini(sentences):
     input_block = "\n".join(f"{i+1}. {s}" for i, s in enumerate(sentences))
     full_prompt = LEGAL_ANALYSIS_PROMPT + "\n" + input_block
@@ -70,23 +61,22 @@ def analyze_sentences_with_gemini(sentences):
     except Exception:
         return []
 
-# Risk evaluation system for final summary rating
 def evaluate_overall_risk(clause_data):
     try:
         risk_score = {"Low": 1, "Medium": 2, "High": 3}
         total = sum(risk_score.get(item.get("risk", "Low"), 1) for item in clause_data)
-        avg = total / len(clause_data) if clause_data else 1
+        clause_count = len(clause_data)
+        avg = total / clause_count if clause_count else 1
 
         if avg < 1.5:
-            return "✅ Low Risk", len(clause_data), 5
+            return "✅ Low Risk", clause_count, 5
         elif avg < 2.2:
-            return "⚠️ Medium Risk", len(clause_data), 3
+            return "⚠️ Medium Risk", clause_count, 3
         else:
-            return "❌ High Risk", len(clause_data), 1
+            return "❌ High Risk", clause_count, 1
     except Exception as e:
         return f"Error parsing risk: {e}", 0, 0
 
-# Full summary prompt to Gemini
 FULL_DOC_PROMPT = """
 You are an expert legal contract assistant.
 Provide a professional markdown summary including:
@@ -99,18 +89,42 @@ Provide a professional markdown summary including:
 --- CONTRACT START ---
 """
 
-# Generate high-level business summary
 def analyze_full_contract(text):
     response = model.generate_content(FULL_DOC_PROMPT + text)
     return response.text.strip()
 
-# Optional webhook or Slack/email alert
 def send_alert_if_critical(rating):
     if "High Risk" in rating:
         timestamp = datetime.now().isoformat()
         print(f"ALERT [{timestamp}]: High Risk Contract Detected")
 
-# Streamlit App Layout
+def generate_heatmap_and_trends(clause_data):
+    df = pd.DataFrame(clause_data)
+    if df.empty:
+        return None, None
+
+    fig1, ax1 = plt.subplots()
+    sns.countplot(data=df, x='category', hue='risk', palette='coolwarm', ax=ax1)
+    ax1.set_title("Clause Risk Distribution by Category")
+    ax1.set_ylabel("Clause Count")
+    plt.xticks(rotation=45)
+
+    risk_timeline = pd.DataFrame({"timestamp": [datetime.now()] * len(df), "risk": df["risk"]})
+    risk_timeline_grouped = risk_timeline.groupby("risk").count()
+
+    fig2, ax2 = plt.subplots()
+    risk_timeline_grouped.plot(kind='bar', legend=False, ax=ax2, color='orange')
+    ax2.set_title("Risk Frequency Overview")
+    ax2.set_ylabel("Occurrences")
+
+    return fig1, fig2
+
+def display_audit_trail(clause_data):
+    st.markdown("### 🧾 Audit Trail")
+    audit_df = pd.DataFrame(clause_data)
+    audit_df['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    st.dataframe(audit_df[['category', 'risk', 'reason', 'timestamp']])
+
 st.title("📄 LexiGuardAI - Rights & Licensing Analyzer")
 st.markdown("AI-driven compliance assistant for OTT platforms like Aha.")
 
@@ -148,10 +162,13 @@ if file:
         else:
             st.warning("No clause-level data returned. Check contract formatting or try again.")
 
-        # Future Metrics Dashboard Placeholder
-        with st.expander("📈 Show Metrics Dashboard (Coming Soon)"):
-            st.info("Clause heatmap, risk trend, and audit trail coming in v2.0")
+        st.markdown("### 🔥 Clause Heatmap and Risk Trend")
+        heatmap_fig, trend_fig = generate_heatmap_and_trends(clause_data)
+        if heatmap_fig and trend_fig:
+            st.pyplot(heatmap_fig)
+            st.pyplot(trend_fig)
 
-# Footer
+        display_audit_trail(clause_data)
+
 st.markdown("---")
 st.caption("LexiGuardAI | Google Solution Challenge 2025")
