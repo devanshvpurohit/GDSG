@@ -9,8 +9,9 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
-st.set_page_config(page_title="LexiGuardAI - AI Contract Analyzer", layout="wide")
+st.set_page_config(page_title="LexiGuardAI v2.0 - AI Contract Analyzer", layout="wide")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
@@ -69,13 +70,13 @@ def evaluate_overall_risk(clause_data):
         avg = total / clause_count if clause_count else 1
 
         if avg < 1.5:
-            return "✅ Low Risk", clause_count, 5
+            return "✅ Low Risk", 5
         elif avg < 2.2:
-            return "⚠️ Medium Risk", clause_count, 3
+            return "⚠️ Medium Risk", 3
         else:
-            return "❌ High Risk", clause_count, 1
+            return "❌ High Risk", 1
     except Exception as e:
-        return f"Error parsing risk: {e}", 0, 0
+        return f"Error parsing risk: {e}", 0
 
 FULL_DOC_PROMPT = """
 You are an expert legal contract assistant.
@@ -98,35 +99,112 @@ def send_alert_if_critical(rating):
         timestamp = datetime.now().isoformat()
         print(f"ALERT [{timestamp}]: High Risk Contract Detected")
 
-def generate_heatmap_and_trends(clause_data):
+# V2.0 FEATURES
+def generate_risk_heatmap(clause_data):
+    """Generate a heatmap showing risk distribution by clause category"""
+    if not clause_data:
+        return None
+    
     df = pd.DataFrame(clause_data)
-    if df.empty:
-        return None, None
+    
+    # Cross tabulation of category vs risk
+    risk_matrix = pd.crosstab(df['category'], df['risk'])
+    
+    # Sort categories by total risk score
+    risk_weights = {'Low': 1, 'Medium': 2, 'High': 3}
+    risk_matrix['score'] = risk_matrix.get('High', 0) * 3 + risk_matrix.get('Medium', 0) * 2 + risk_matrix.get('Low', 0)
+    risk_matrix = risk_matrix.sort_values('score', ascending=False)
+    risk_matrix = risk_matrix.drop(columns=['score'])
+    
+    # Create heatmap
+    plt.figure(figsize=(10, 8))
+    if not risk_matrix.empty:
+        ax = sns.heatmap(risk_matrix, cmap="YlOrRd", annot=True, fmt="d", linewidths=.5)
+        plt.title("Clause Risk Heatmap")
+        plt.ylabel("Clause Category")
+        plt.xlabel("Risk Level")
+        plt.tight_layout()
+        return plt.gcf()
+    return None
 
-    fig1, ax1 = plt.subplots()
-    sns.countplot(data=df, x='category', hue='risk', palette='coolwarm', ax=ax1)
-    ax1.set_title("Clause Risk Distribution by Category")
-    ax1.set_ylabel("Clause Count")
-    plt.xticks(rotation=45)
-
-    risk_timeline = pd.DataFrame({"timestamp": [datetime.now()] * len(df), "risk": df["risk"]})
-    risk_timeline_grouped = risk_timeline.groupby("risk").count()
-
-    fig2, ax2 = plt.subplots()
-    risk_timeline_grouped.plot(kind='bar', legend=False, ax=ax2, color='orange')
-    ax2.set_title("Risk Frequency Overview")
-    ax2.set_ylabel("Occurrences")
-
-    return fig1, fig2
+def generate_risk_trends(clause_data):
+    """Generate a visualization of risk distribution"""
+    if not clause_data:
+        return None
+    
+    df = pd.DataFrame(clause_data)
+    
+    # Count risks by category
+    risk_counts = df['risk'].value_counts().reindex(['High', 'Medium', 'Low'])
+    
+    plt.figure(figsize=(8, 5))
+    colors = ['#d9534f', '#f0ad4e', '#5cb85c']  # Red, Orange, Green
+    ax = risk_counts.plot(kind='bar', color=colors)
+    
+    plt.title("Risk Distribution Overview")
+    plt.ylabel("Number of Clauses")
+    plt.xlabel("Risk Level")
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Add data labels on top of bars
+    for i, v in enumerate(risk_counts):
+        ax.text(i, v + 0.1, str(v), ha='center')
+    
+    plt.tight_layout()
+    return plt.gcf()
 
 def display_audit_trail(clause_data):
-    st.markdown("### 🧾 Audit Trail")
+    """Generate audit trail data"""
+    if not clause_data:
+        return None
+    
     audit_df = pd.DataFrame(clause_data)
-    audit_df['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    st.dataframe(audit_df[['category', 'risk', 'reason', 'timestamp']])
+    # Add timestamp and user info
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    audit_df['analyzed_at'] = timestamp
+    audit_df['analyzed_by'] = "LexiGuardAI v2.0"
+    
+    return audit_df[['category', 'risk', 'reason', 'analyzed_at', 'analyzed_by']]
 
-st.title("📄 LexiGuardAI - Rights & Licensing Analyzer")
+def categorized_risk_chart(clause_data):
+    """Create a bar chart showing risk levels by category"""
+    if not clause_data:
+        return None
+        
+    df = pd.DataFrame(clause_data)
+    # Get top 8 categories by frequency
+    top_categories = df['category'].value_counts().nlargest(8).index.tolist()
+    filtered_df = df[df['category'].isin(top_categories)]
+    
+    plt.figure(figsize=(10, 6))
+    ax = sns.countplot(data=filtered_df, x='category', hue='risk', 
+                       hue_order=['High', 'Medium', 'Low'],
+                       palette={'High': '#d9534f', 'Medium': '#f0ad4e', 'Low': '#5cb85c'})
+    
+    plt.title("Risk Distribution by Clause Category")
+    plt.xlabel("Clause Category")
+    plt.ylabel("Number of Clauses")
+    plt.xticks(rotation=45, ha='right')
+    plt.legend(title="Risk Level")
+    plt.tight_layout()
+    
+    return plt.gcf()
+
+# UI COMPONENTS
+st.title("📄 LexiGuardAI v2.0 - Rights & Licensing Analyzer")
 st.markdown("AI-driven compliance assistant for OTT platforms like Aha.")
+
+# Add a version badge
+st.sidebar.markdown("### 🚀 **v2.0**")
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Features")
+st.sidebar.markdown("✅ Contract Analysis")
+st.sidebar.markdown("✅ Risk Assessment")
+st.sidebar.markdown("✅ Clause Heatmap")
+st.sidebar.markdown("✅ Risk Trends")
+st.sidebar.markdown("✅ Audit Trail")
+st.sidebar.markdown("---")
+st.sidebar.caption("© 2025 LexiGuardAI")
 
 file = st.file_uploader("📁 Upload a contract file", type=["pdf", "docx", "txt"])
 
@@ -138,7 +216,7 @@ if file:
         with st.spinner("Analyzing clauses using AI..."):
             sentences = split_sentences(contract_text)
             clause_data = analyze_sentences_with_gemini(sentences)
-            overall_rating, reviewed_count, stars = evaluate_overall_risk(clause_data)
+            overall_rating, stars = evaluate_overall_risk(clause_data)
             send_alert_if_critical(overall_rating)
 
         with st.spinner("Summarizing the contract..."):
@@ -146,29 +224,58 @@ if file:
 
         st.markdown("### 📊 Compliance Summary")
         stars_display = "⭐" * stars + "✩" * (5 - stars)
-        st.success(f"**{overall_rating} | {stars_display}**  ({reviewed_count} clauses reviewed)")
+        st.success(f"**{overall_rating} | {stars_display}**")
 
-        st.markdown("### 📋 Executive Summary")
-        st.markdown(summary_report)
+        # Two-column layout for summary and risk visualization
+        col1, col2 = st.columns([3, 2])
+        
+        with col1:
+            st.markdown("### 📋 Executive Summary")
+            st.markdown(summary_report)
 
-        st.markdown("### 📑 Clause-by-Clause Review")
-        if clause_data:
-            for idx, item in enumerate(clause_data, 1):
-                st.markdown(f"**{idx}. {item.get('category', 'Uncategorized')}**")
-                st.write(f"📝 *Clause:* {item['sentence']}")
-                st.write(f"🔐 *Risk Level:* `{item['risk']}`")
-                st.write(f"💡 *Reason:* {item['reason']}")
-                st.markdown("---")
-        else:
-            st.warning("No clause-level data returned. Check contract formatting or try again.")
+        with col2:
+            st.markdown("### 📈 Risk Distribution")
+            risk_trend_fig = generate_risk_trends(clause_data)
+            if risk_trend_fig:
+                st.pyplot(risk_trend_fig)
+            else:
+                st.info("No risk data available to visualize.")
 
-        st.markdown("### 🔥 Clause Heatmap and Risk Trend")
-        heatmap_fig, trend_fig = generate_heatmap_and_trends(clause_data)
-        if heatmap_fig and trend_fig:
+        # Clause heatmap
+        st.markdown("### 🔥 Clause Risk Heatmap")
+        heatmap_fig = generate_risk_heatmap(clause_data)
+        if heatmap_fig:
             st.pyplot(heatmap_fig)
-            st.pyplot(trend_fig)
+        else:
+            st.info("Insufficient data to generate heatmap.")
+            
+        # Category risk distribution
+        st.markdown("### 📊 Category Risk Analysis")
+        category_fig = categorized_risk_chart(clause_data)
+        if category_fig:
+            st.pyplot(category_fig)
+        else:
+            st.info("Insufficient data for category analysis.")
 
-        display_audit_trail(clause_data)
+        # Clause-by-clause review in an expandable section
+        with st.expander("📑 Detailed Clause-by-Clause Review", expanded=False):
+            if clause_data:
+                for idx, item in enumerate(clause_data, 1):
+                    st.markdown(f"**{idx}. {item.get('category', 'Uncategorized')}**")
+                    st.write(f"📝 *Clause:* {item['sentence']}")
+                    st.write(f"🔐 *Risk Level:* `{item['risk']}`")
+                    st.write(f"💡 *Reason:* {item['reason']}")
+                    st.markdown("---")
+            else:
+                st.warning("No clause-level data returned. Check contract formatting or try again.")
+
+        # Audit trail
+        with st.expander("🧾 Audit Trail", expanded=False):
+            audit_df = display_audit_trail(clause_data)
+            if audit_df is not None:
+                st.dataframe(audit_df)
+            else:
+                st.info("No audit data available.")
 
 st.markdown("---")
-st.caption("LexiGuardAI | Google Solution Challenge 2025")
+st.caption("LexiGuardAI v2.0 | Google Solution Challenge 2025")
