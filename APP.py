@@ -4,22 +4,30 @@ import docx
 import os
 import google.generativeai as genai
 import re
+import json
+
+# ---------------------------
+# Project: LexiGuardAI
+# For: Google Solution Challenge 2025
+# Track: Content Rights Management for OTT Platforms (e.g., Aha)
+# Target: CXS50 Harvard Offline Students (Avg. GPA 4.5)
+# Objective: Automate content licensing, risk assessment, and compliance tracking
+# ---------------------------
 
 # Set Streamlit page config
-st.set_page_config(page_title="📄 AI Licensing Risk Analyzer", layout="wide")
+st.set_page_config(page_title="LexiGuardAI - AI Contract Analyzer", layout="wide")
 
-# Set API key
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", st.secrets.get("GEMINI_API_KEY", ""))
-
+# Set API key from environment
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    st.error("❌ Gemini API key missing. Set GEMINI_API_KEY as env variable or secret.")
+    st.error("❌ Gemini API key not found. Please set GEMINI_API_KEY in environment variables.")
     st.stop()
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("models/gemini-1.5-flash")
 
-# Text extraction function
+# Extract text from uploaded contract
 def extract_text(file):
     try:
         if file.name.endswith(".pdf"):
@@ -35,73 +43,99 @@ def extract_text(file):
     except Exception as e:
         return f"Error reading file: {e}"
 
-# Split into clean sentences
+# Clean and split text into sentences
 def split_sentences(text):
     text = re.sub(r"\n+", " ", text)
     return [s.strip() for s in re.split(r'(?<=[.?!])\s+', text) if len(s.strip()) > 5]
 
-# Pseudo-fine-tune Gemini via prompt
-def analyze_sentences(sentences):
-    results = []
-    base_prompt = """
-You are a legal contract analysis AI assistant trained like LegalBERT.
-
-For each sentence provided, return:
+# Simulated LegalBERT-like prompt analysis via Gemini
+LEGAL_ANALYSIS_PROMPT = """
+You are a legal AI assistant trained to analyze contract clauses like LegalBERT.
+For each sentence below, return:
 - Sentence
-- Legal Category (e.g. Term, Territory, Rights, Indemnity, Exclusivity, Termination, Confidentiality)
+- Clause Category (e.g. Term, Territory, Termination, IP Rights, Indemnity)
 - Risk Level (Low, Medium, High)
-- Justification (1-2 lines)
-
-Return result in structured JSON format.
+- Reason for Risk Rating
+Return output in JSON format as a list of dictionaries with keys: sentence, category, risk, reason.
 """
 
-    full_prompt = base_prompt + "\nSentences:\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(sentences))
-
+def analyze_sentences_with_gemini(sentences):
+    input_block = "\n".join(f"{i+1}. {s}" for i, s in enumerate(sentences))
+    full_prompt = LEGAL_ANALYSIS_PROMPT + "\n" + input_block
     response = model.generate_content(full_prompt)
     return response.text
 
-# Gemini full document summarization
-def analyze_contract_full(text):
-    prompt = f"""
-You are a legal AI assistant.
+# Parse risk levels and calculate summary score
+def evaluate_overall_risk(json_text):
+    try:
+        data = json.loads(json_text)
+        risk_score = {"Low": 1, "Medium": 2, "High": 3}
+        total = sum(risk_score.get(item.get("risk", "Low"), 1) for item in data)
+        avg = total / len(data) if data else 1
+        if avg < 1.5:
+            rating = "✅ Low Risk"
+            stars = "⭐⭐⭐⭐⭐"
+        elif avg < 2.2:
+            rating = "⚠️ Medium Risk"
+            stars = "⭐⭐⭐✩✩"
+        else:
+            rating = "❌ High Risk"
+            stars = "⭐✩✩✩✩"
+        return f"{rating}  | Compliance Score: {stars}", len(data)
+    except Exception as e:
+        return f"Error parsing JSON: {e}", 0
 
-Analyze this licensing contract and return a markdown report with:
+# Full document summary using Gemini
+FULL_DOC_PROMPT = """
+You are a legal contract analyst.
+Given the contract below, generate a structured markdown report:
 
 1. Licensing Terms (duration, territory, platforms)
 2. Ambiguous Clauses
-3. Legal Risks or Violations
+3. Legal Risks and Violations
 4. Actionable Recommendations
-5. Business Summary
+5. Summary for Business Teams
 
 Contract:
-{text}
 """
+
+def analyze_full_contract(text):
+    prompt = FULL_DOC_PROMPT + text
     response = model.generate_content(prompt)
     return response.text
 
+# Placeholder for future real-time alert webhook (e.g., Slack, Email)
+def send_alert_if_critical(rating):
+    if "High Risk" in rating:
+        # Future: send email/slack alert to legal team
+        pass
+
 # Streamlit UI
-st.title("📄 AI-Powered Contract Licensing Analyzer (Gemini Only)")
-st.markdown("Upload a contract. AI will simulate LegalBERT-like analysis via Gemini and provide detailed sentence-level and full-document review.")
+st.title("📄 LexiGuardAI - AI-Powered Rights & Licensing Analyzer")
+st.markdown("Empowering OTT platforms like Aha with AI-driven content contract analysis and compliance.")
 
 file = st.file_uploader("📁 Upload contract file", type=["pdf", "docx", "txt"])
 
 if file:
-    with st.spinner("📄 Extracting contract text..."):
+    with st.spinner("Extracting text from document..."):
         contract_text = extract_text(file)
 
-    st.subheader("📃 Contract Text Preview")
-    st.text_area("Extracted Contract", contract_text, height=300)
-
-    if st.button("🔎 Run AI Analysis"):
-        with st.spinner("✂️ Splitting into sentences..."):
+    if st.button("🔍 Run Legal AI Analysis"):
+        with st.spinner("Splitting and analyzing clauses..."):
             sentences = split_sentences(contract_text)
+            clause_json_text = analyze_sentences_with_gemini(sentences)
+            overall_rating, count = evaluate_overall_risk(clause_json_text)
+            send_alert_if_critical(overall_rating)
 
-        with st.spinner("🤖 Analyzing each sentence with Gemini (simulated LegalBERT)..."):
-            sentence_analysis = analyze_sentences(sentences)
-            st.markdown("### 🧩 Per-Sentence Legal Risk Analysis")
-            st.markdown(sentence_analysis)
+        with st.spinner("Generating summary report..."):
+            full_report = analyze_full_contract(contract_text)
 
-        with st.spinner("📊 Generating full document compliance report..."):
-            full_report = analyze_contract_full(contract_text)
-            st.markdown("### 📋 Full Contract Analysis (Gemini Flash)")
-            st.markdown(full_report)
+        st.markdown("### 📊 Overall Contract Risk & Compliance Rating")
+        st.success(f"**{overall_rating}** ({count} clauses reviewed)")
+
+        st.markdown("### 📋 AI-Generated Summary Report")
+        st.markdown(full_report)
+
+# Footer
+st.markdown("---")
+st.caption("LexiGuardAI • CXS50 Harvard • Google Solution Challenge 2025")
