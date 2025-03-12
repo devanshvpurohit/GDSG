@@ -14,10 +14,8 @@ import json
 # Objective: Automate content licensing, risk assessment, and compliance tracking
 # ---------------------------
 
-# Set Streamlit page config
 st.set_page_config(page_title="LexiGuardAI - AI Contract Analyzer", layout="wide")
 
-# Set API key from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     st.error("❌ Gemini API key not found. Please set GEMINI_API_KEY in environment variables.")
@@ -52,18 +50,25 @@ def split_sentences(text):
 LEGAL_ANALYSIS_PROMPT = """
 You are a legal AI assistant trained to analyze contract clauses like LegalBERT.
 For each sentence below, return:
-- Sentence
-- Clause Category (e.g. Term, Territory, Termination, IP Rights, Indemnity)
-- Risk Level (Low, Medium, High)
-- Reason for Risk Rating
-Return output in JSON format as a list of dictionaries with keys: sentence, category, risk, reason.
+- sentence
+- category (e.g. Term, Territory, Termination, IP Rights, Indemnity)
+- risk (Low, Medium, High)
+- reason
+Respond only in JSON format: [{...}, {...}, ...]
 """
 
 def analyze_sentences_with_gemini(sentences):
     input_block = "\n".join(f"{i+1}. {s}" for i, s in enumerate(sentences))
     full_prompt = LEGAL_ANALYSIS_PROMPT + "\n" + input_block
     response = model.generate_content(full_prompt)
-    return response.text
+    try:
+        match = re.search(r'\[\s*\{.*?\}\s*\]', response.text, re.DOTALL)
+        if match:
+            return match.group(0)
+        else:
+            return "[]"
+    except Exception:
+        return "[]"
 
 # Parse risk levels and calculate summary score
 def evaluate_overall_risk(json_text):
@@ -138,4 +143,4 @@ if file:
 
 # Footer
 st.markdown("---")
-st.caption("LexiGuardAI ")
+st.caption("LexiGuardAI")
