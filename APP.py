@@ -1,8 +1,10 @@
 import streamlit as st
 import requests
 import google.generativeai as genai
+import fitz  # PyMuPDF for PDF
+import docx  # python-docx for Word files
 
-# --- API Keys (replace with actual keys directly here) ---
+# --- API Keys (replace directly here for testing) ---
 HF_API_KEY = "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"
 GEMINI_API_KEY = "AIzaSyAW_b4mee9l8eP931cqd9xqErHV34f7OEw"
 
@@ -10,9 +12,25 @@ GEMINI_API_KEY = "AIzaSyAW_b4mee9l8eP931cqd9xqErHV34f7OEw"
 LEGAL_BERT_API_URL = "https://api-inference.huggingface.co/models/nlpaueb/legal-bert-base-uncased"
 headers = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-# --- Functions to Process Contracts ---
+# --- Functions to Process Files and Contracts ---
 
-# Function to analyze contract using LEGAL-BERT
+# Extract text from PDF
+def extract_text_from_pdf(uploaded_file):
+    pdf = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+    text = ""
+    for page in pdf:
+        text += page.get_text()
+    return text
+
+# Extract text from DOCX
+def extract_text_from_docx(uploaded_file):
+    doc = docx.Document(uploaded_file)
+    full_text = []
+    for para in doc.paragraphs:
+        full_text.append(para.text)
+    return '\n'.join(full_text)
+
+# Analyze contract using LEGAL-BERT
 def analyze_contract(text):
     response = requests.post(LEGAL_BERT_API_URL, headers=headers, json={"inputs": text})
     if response.status_code == 200:
@@ -20,7 +38,7 @@ def analyze_contract(text):
     else:
         return {"error": f"Failed to analyze contract. Error code: {response.status_code}"}
 
-# Function to get compliance summary using Gemini API
+# Get compliance summary using Gemini API
 def get_compliance_summary(text):
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel("gemini-pro")
@@ -35,36 +53,49 @@ def get_compliance_summary(text):
 st.set_page_config(page_title="Content Rights & Licensing Manager", page_icon="📜")
 st.title("📜 AI-Powered Content Rights & Licensing Manager")
 
-# File Upload
-uploaded_file = st.file_uploader("Upload a contract file (TXT format only)", type=["txt"])
+# File Upload (Multiple formats)
+uploaded_file = st.file_uploader("Upload a contract file (TXT, PDF, DOCX)", type=["txt", "pdf", "docx"])
 
 # Analyze Button and Result Display
 if uploaded_file:
-    contract_text = uploaded_file.read().decode("utf-8")
-    st.subheader("📄 Contract Preview")
-    st.text_area("Contract Content", contract_text, height=300)
+    file_type = uploaded_file.type
+    contract_text = ""
 
-    if st.button("🔍 Analyze Contract"):
-        with st.spinner("Analyzing the contract using AI models..."):
-            # AI-based Analysis
-            bert_analysis = analyze_contract(contract_text)
-            gemini_summary = get_compliance_summary(contract_text)
+    # Extract text based on file type
+    if file_type == "text/plain":
+        contract_text = uploaded_file.read().decode("utf-8")
+    elif file_type == "application/pdf":
+        contract_text = extract_text_from_pdf(uploaded_file)
+    elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        contract_text = extract_text_from_docx(uploaded_file)
+    else:
+        st.error("Unsupported file format!")
 
-        # Display Results
-        st.subheader("📑 LEGAL-BERT Contract Analysis")
-        if isinstance(bert_analysis, dict) and "error" in bert_analysis:
-            st.error(bert_analysis["error"])
-        else:
-            st.json(bert_analysis)
+    if contract_text:
+        st.subheader("📄 Contract Preview")
+        st.text_area("Contract Content", contract_text, height=300)
 
-        st.subheader("✅ Gemini AI Compliance Summary")
-        st.write(gemini_summary)
+        if st.button("🔍 Analyze Contract"):
+            with st.spinner("Analyzing the contract using AI models..."):
+                # AI-based Analysis
+                bert_analysis = analyze_contract(contract_text)
+                gemini_summary = get_compliance_summary(contract_text)
 
-        # Simple Risk Warning based on LEGAL-BERT (Optional)
-        if isinstance(bert_analysis, list):
-            risk_labels = [item['label'] for item in bert_analysis]
-            risk_scores = [item['score'] for item in bert_analysis if item['label'] == "Non-Compliant"]
-            if risk_scores and risk_scores[0] > 0.5:
-                st.error("🚨 Warning: This contract might have compliance issues. Please review carefully!")
+            # Display Results
+            st.subheader("📑 LEGAL-BERT Contract Analysis")
+            if isinstance(bert_analysis, dict) and "error" in bert_analysis:
+                st.error(bert_analysis["error"])
             else:
-                st.success("✅ The contract appears compliant based on AI analysis.")
+                st.json(bert_analysis)
+
+            st.subheader("✅ Gemini AI Compliance Summary")
+            st.write(gemini_summary)
+
+            # Simple Risk Warning based on LEGAL-BERT (Optional)
+            if isinstance(bert_analysis, list):
+                risk_labels = [item['label'] for item in bert_analysis]
+                risk_scores = [item['score'] for item in bert_analysis if item['label'] == "Non-Compliant"]
+                if risk_scores and risk_scores[0] > 0.5:
+                    st.error("🚨 Warning: This contract might have compliance issues. Please review carefully!")
+                else:
+                    st.success("✅ The contract appears compliant based on AI analysis.")
