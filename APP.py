@@ -43,15 +43,15 @@ def get_compliance_summary(text):
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel("gemini-pro")
     response = model.generate_content(
-        f"Analyze this licensing contract for compliance issues, summarize key licensing terms (like duration, regions, platforms), and highlight any ambiguous clauses:\n\n{text}"
+        f"Analyze this licensing contract for compliance issues. Summarize key licensing terms (like duration, regions, platforms), highlight any ambiguous clauses, and give recommendations for legal compliance:\n\n{text}"
     )
     return response.text
 
 # --- Streamlit App UI ---
 
 # Title
-st.set_page_config(page_title="Content Rights & Licensing Manager", page_icon="📜")
-st.title("📜 AI-Powered Content Rights & Licensing Manager")
+st.set_page_config(page_title="AI Licensing & Compliance Manager", page_icon="📜")
+st.title("📜 AI-Powered Licensing & Compliance Manager")
 
 # File Upload (Multiple formats)
 uploaded_file = st.file_uploader("Upload a contract file (TXT, PDF, DOCX)", type=["txt", "pdf", "docx"])
@@ -76,7 +76,7 @@ if uploaded_file:
         st.text_area("Contract Content", contract_text, height=300)
 
         if st.button("🔍 Analyze Contract"):
-            with st.spinner("Analyzing the contract using AI models..."):
+            with st.spinner("Analyzing the contract with AI models..."):
                 # AI-based Analysis
                 bert_analysis = analyze_contract(contract_text)
                 gemini_summary = get_compliance_summary(contract_text)
@@ -96,6 +96,6 @@ if uploaded_file:
                 risk_labels = [item['label'] for item in bert_analysis]
                 risk_scores = [item['score'] for item in bert_analysis if item['label'] == "Non-Compliant"]
                 if risk_scores and risk_scores[0] > 0.5:
-                    st.error("🚨 Warning: This contract might have compliance issues. Please review carefully!")
+                    st.error("🚨 Warning: High risk of compliance issues detected. Please review carefully!")
                 else:
-                    st.success("✅ The contract appears compliant based on AI analysis.")
+                    st.success("✅ No major compliance issues detected based on AI analysis.")
