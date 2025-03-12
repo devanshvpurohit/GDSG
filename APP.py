@@ -3,8 +3,8 @@ import requests
 import google.generativeai as genai
 
 # --- API Keys (replace with actual keys directly here) ---
-HF_API_KEY = "YOUR_HUGGINGFACE_API_KEY"
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+HF_API_KEY = "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"
+GEMINI_API_KEY = "AIzaSyAW_b4mee9l8eP931cqd9xqErHV34f7OEw"
 
 # --- Hugging Face LEGAL-BERT API Setup ---
 LEGAL_BERT_API_URL = "https://api-inference.huggingface.co/models/nlpaueb/legal-bert-base-uncased"
