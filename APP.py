@@ -1,26 +1,30 @@
 import streamlit as st
-import fitz
+import fitz  # PyMuPDF
 import docx
 import os
-import torch
+import requests
 import google.generativeai as genai
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
-# Gemini API setup
+# ✅ MUST BE FIRST
+st.set_page_config(page_title="📄 AI Content Rights & Licensing Analyzer", layout="wide")
+
+# 🔐 Load API keys from environment (recommended for Streamlit Cloud)
+HF_API_TOKEN = os.getenv("HF_API_TOKEN", st.secrets.get("HF_API_TOKEN", ""))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", st.secrets.get("GEMINI_API_KEY", ""))
+
+# ✅ Check keys
+if not HF_API_TOKEN:
+    st.error("🚨 Hugging Face API key not found. Set HF_API_TOKEN in environment.")
+    st.stop()
+if not GEMINI_API_KEY:
+    st.error("🚨 Gemini API key not found. Set GEMINI_API_KEY in environment.")
+    st.stop()
+
+# ✅ Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("models/gemini-1.5-flash")
 
-# Load LEGAL-BERT model: pile-of-law/legalbert-large-1.7M-2
-@st.cache_resource
-def load_legalbert_pipeline():
-    tokenizer = AutoTokenizer.from_pretrained("pile-of-law/legalbert-large-1.7M-2")
-    model = AutoModelForSequenceClassification.from_pretrained("pile-of-law/legalbert-large-1.7M-2")
-    return pipeline("text-classification", model=model, tokenizer=tokenizer, top_k=5)
-
-legalbert_pipeline = load_legalbert_pipeline()
-
-# Extract text
+# ✅ Extract contract text
 def extract_text(file):
     try:
         if file.name.endswith(".pdf"):
@@ -36,12 +40,21 @@ def extract_text(file):
     except Exception as e:
         return f"Error extracting text: {e}"
 
-# Analyze with LegalBERT
+# ✅ Analyze with Hugging Face LegalBERT (via API)
 def analyze_with_legalbert(text):
-    # Hugging Face models are limited in input length, we trim to 512 tokens
-    return legalbert_pipeline(text[:512])
+    url = "https://api-inference.huggingface.co/models/pile-of-law/legalbert-large-1.7M-2"
+    headers = {
+        "Authorization": f"Bearer {HF_API_TOKEN}"
+    }
+    payload = {
+        "inputs": text[:512]  # Truncate to avoid model input length errors
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code != 200:
+        return {"error": f"Hugging Face API error: {response.status_code} {response.text}"}
+    return response.json()
 
-# Analyze with Gemini Flash
+# ✅ Analyze with Gemini
 def analyze_with_gemini(text):
     prompt = f"""
 You're a legal AI assistant. Analyze the following licensing contract and return a markdown report with:
@@ -58,29 +71,28 @@ Contract:
     response = gemini_model.generate_content(prompt)
     return response.text
 
-# Streamlit UI
-st.set_page_config(page_title="📄 AI Content Rights & Licensing Analyzer", layout="wide")
+# ✅ Streamlit App UI
 st.title("📄 AI-Powered Content Rights & Licensing Manager")
-st.write("Upload a contract file below. We'll extract, analyze, and summarize legal risks and key clauses using LegalBERT and Gemini Flash.")
+st.markdown("Upload a contract file to extract legal terms, assess risk, and get revision suggestions.")
 
-file = st.file_uploader("📁 Upload Contract (PDF, DOCX, or TXT)", type=["pdf", "docx", "txt"])
+file = st.file_uploader("📁 Upload Contract File (PDF, DOCX, or TXT)", type=["pdf", "docx", "txt"])
 
 if file:
-    with st.spinner("📄 Extracting contract text..."):
+    with st.spinner("📄 Extracting text..."):
         contract_text = extract_text(file)
 
-    st.subheader("📃 Extracted Contract Text")
-    st.text_area("Text Preview", contract_text, height=300)
+    st.subheader("📃 Contract Preview")
+    st.text_area("Extracted Text", contract_text, height=300)
 
     if st.button("🔍 Run AI Analysis"):
-        with st.spinner("⚖️ Classifying risks using LegalBERT..."):
+        with st.spinner("⚖️ Analyzing with LegalBERT (Hugging Face)..."):
             legalbert_results = analyze_with_legalbert(contract_text)
 
-        with st.spinner("🧠 Generating compliance report with Gemini Flash..."):
+        with st.spinner("🧠 Generating report with Gemini Flash..."):
             gemini_results = analyze_with_gemini(contract_text)
 
-        st.markdown("### ⚠️ Risk Classification (LEGALBERT)")
+        st.markdown("### ⚠️ Legal Risk Classification (LegalBERT - Hugging Face)")
         st.json(legalbert_results)
 
-        st.markdown("### 📋 Gemini Compliance & Risk Report")
+        st.markdown("### 📋 Gemini Risk & Licensing Summary")
         st.markdown(gemini_results)
