@@ -138,4 +138,4 @@ if file:
 
 # Footer
 st.markdown("---")
-st.caption("LexiGuardAI • CXS50 Harvard • Google Solution Challenge 2025")
+st.caption("LexiGuardAI ")
