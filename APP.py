@@ -78,13 +78,13 @@ def evaluate_overall_risk(clause_data):
         avg = total / len(clause_data) if clause_data else 1
 
         if avg < 1.5:
-            return "✅ Low Risk  | ⭐⭐⭐⭐⭐", len(clause_data)
+            return "✅ Low Risk", len(clause_data), 5
         elif avg < 2.2:
-            return "⚠️ Medium Risk  | ⭐⭐⭐✩✩", len(clause_data)
+            return "⚠️ Medium Risk", len(clause_data), 3
         else:
-            return "❌ High Risk  | ⭐✩✩✩✩", len(clause_data)
+            return "❌ High Risk", len(clause_data), 1
     except Exception as e:
-        return f"Error parsing risk: {e}", 0
+        return f"Error parsing risk: {e}", 0, 0
 
 # Full summary prompt to Gemini
 FULL_DOC_PROMPT = """
@@ -107,7 +107,6 @@ def analyze_full_contract(text):
 # Optional webhook or Slack/email alert
 def send_alert_if_critical(rating):
     if "High Risk" in rating:
-        # Placeholder for Slack/Email webhook integration
         timestamp = datetime.now().isoformat()
         print(f"ALERT [{timestamp}]: High Risk Contract Detected")
 
@@ -125,17 +124,29 @@ if file:
         with st.spinner("Analyzing clauses using AI..."):
             sentences = split_sentences(contract_text)
             clause_data = analyze_sentences_with_gemini(sentences)
-            overall_rating, reviewed_count = evaluate_overall_risk(clause_data)
+            overall_rating, reviewed_count, stars = evaluate_overall_risk(clause_data)
             send_alert_if_critical(overall_rating)
 
         with st.spinner("Summarizing the contract..."):
             summary_report = analyze_full_contract(contract_text)
 
         st.markdown("### 📊 Compliance Summary")
-        st.success(f"**{overall_rating}** ({reviewed_count} clauses reviewed)")
+        stars_display = "⭐" * stars + "✩" * (5 - stars)
+        st.success(f"**{overall_rating} | {stars_display}**  ({reviewed_count} clauses reviewed)")
 
         st.markdown("### 📋 Executive Summary")
         st.markdown(summary_report)
+
+        st.markdown("### 📑 Clause-by-Clause Review")
+        if clause_data:
+            for idx, item in enumerate(clause_data, 1):
+                st.markdown(f"**{idx}. {item.get('category', 'Uncategorized')}**")
+                st.write(f"📝 *Clause:* {item['sentence']}")
+                st.write(f"🔐 *Risk Level:* `{item['risk']}`")
+                st.write(f"💡 *Reason:* {item['reason']}")
+                st.markdown("---")
+        else:
+            st.warning("No clause-level data returned. Check contract formatting or try again.")
 
         # Future Metrics Dashboard Placeholder
         with st.expander("📈 Show Metrics Dashboard (Coming Soon)"):
