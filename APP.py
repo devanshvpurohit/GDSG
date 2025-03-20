@@ -10,6 +10,119 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import io
+# Streamlit Config
+st.set_page_config(page_title="LexiGuardAI v2.0 - AI Contract Analyzer", layout="wide")
+
+# HTML Animation
+html_code = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LexiGuardAI Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body, html { width: 100%; height: 100%; overflow: hidden; background: black; }
+  canvas { display: block; position: absolute; top: 0; left: 0; }
+</style>
+</head>
+<body>
+<canvas id="animationCanvas"></canvas>
+<script>
+const canvas = document.getElementById('animationCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const particles = [];
+const numParticles = 800;
+
+class Particle {
+  constructor(x, y, color) {
+    this.x = x;
+    this.y = y;
+    this.color = color;
+    this.size = 2.5;
+    this.vx = (Math.random() - 0.5) * 2;
+    this.vy = (Math.random() - 0.5) * 2;
+    this.targetX = null;
+    this.targetY = null;
+  }
+  update() {
+    if (this.targetX !== null && this.targetY !== null) {
+      this.x += (this.targetX - this.x) * 0.05;
+      this.y += (this.targetY - this.y) * 0.05;
+    } else {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+      if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+    }
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+  }
+}
+
+for (let i = 0; i < numParticles; i++) {
+  particles.push(new Particle(Math.random() * canvas.width, Math.random() * canvas.height, i % 2 === 0 ? 'red' : 'white'));
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach(p => {
+    p.update();
+    p.draw();
+  });
+  requestAnimationFrame(render);
+}
+
+function formTextShape(text, fontSize, color) {
+  const textCanvas = document.createElement('canvas');
+  const textCtx = textCanvas.getContext('2d');
+  textCanvas.width = canvas.width;
+  textCanvas.height = canvas.height;
+  textCtx.fillStyle = color;
+  textCtx.font = `bold ${fontSize}px Arial`;
+  textCtx.fillText(text, canvas.width / 3, canvas.height / 2);
+
+  const imageData = textCtx.getImageData(0, 0, canvas.width, canvas.height);
+  const positions = [];
+  for (let y = 0; y < canvas.height; y += 8) {
+    for (let x = 0; x < canvas.width; x += 8) {
+      const index = (y * canvas.width + x) * 4;
+      if (imageData.data[index + 3] > 128) positions.push({ x, y });
+    }
+  }
+  positions.sort(() => Math.random() - 0.5);
+  particles.forEach((p, i) => {
+    if (positions[i]) {
+      p.targetX = positions[i].x;
+      p.targetY = positions[i].y;
+    }
+  });
+}
+
+function cycleAnimation() {
+  formTextShape('LexiGuardAI', 100, 'white');
+  setTimeout(() => {
+    particles.forEach(p => { p.targetX = null; p.targetY = null; });
+    setTimeout(cycleAnimation, 4000);
+  }, 4000);
+}
+
+render();
+setTimeout(cycleAnimation, 2000);
+</script>
+</body>
+</html>
+"""
+
+st.components.v1.html(html_code, height=600)
 
 # Streamlit config
 st.set_page_config(page_title="LexiGuardAI v2.0 - AI Contract Analyzer", layout="wide")
