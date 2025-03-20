@@ -124,9 +124,6 @@ setTimeout(cycleAnimation, 2000);
 
 st.components.v1.html(html_code, height=600)
 
-# Streamlit config
-st.set_page_config(page_title="LexiGuardAI v2.0 - AI Contract Analyzer", layout="wide")
-
 # API Key
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
