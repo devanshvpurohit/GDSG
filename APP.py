@@ -17,15 +17,24 @@ html_file_path = "rex2.html"  #
 if os.path.exists(html_file_path):
     with open(html_file_path, "r", encoding="utf-8") as file:
         html_code = file.read()
+    
+    # Extract only the body content (to avoid duplicate <html> and <body> issues in Streamlit)
+    match = re.search(r"<body.*?>(.*?)</body>", html_code, re.DOTALL)
+    if match:
+        extracted_html = match.group(1)
+    else:
+        extracted_html = html_code  # Fallback to full content if <body> not found
 
-    # Inject HTML as a full-page background
+    # Embed the extracted HTML inside a fixed div
     components.html(f"""
         <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;">
-            {html_code}
+            {extracted_html}
         </div>
     """, height=0, scrolling=False)
 else:
-    st.error("Background HTML file not found. Please ensure `rex2.html` exists in the project directory.")
+    st.error("❌ Background HTML file `rex2.html` not found. Please ensure it's in the project directory.")
+
+# Streamlit UI Content
 
 
 # API Key
