@@ -10,31 +10,117 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import io
-# Streamlit Config
+
+
+import streamlit.components.v1 as components
+
+# Set Streamlit Page Config
 st.set_page_config(page_title="LexiGuardAI v2.0 - AI Contract Analyzer", layout="wide")
 
-html_file_path = "rex2.html"  # 
-if os.path.exists(html_file_path):
-    with open(html_file_path, "r", encoding="utf-8") as file:
-        html_code = file.read()
-    
-    # Extract only the body content (to avoid duplicate <html> and <body> issues in Streamlit)
-    match = re.search(r"<body.*?>(.*?)</body>", html_code, re.DOTALL)
-    if match:
-        extracted_html = match.group(1)
-    else:
-        extracted_html = html_code  # Fallback to full content if <body> not found
+# HTML + JavaScript for the Interactive Constellation Background
+html_code = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Constellation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background-color: black; }
+    canvas { display: block; position: fixed; top: 0; left: 0; z-index: -1; }
+  </style>
+</head>
+<body>
+<canvas id="constellation"></canvas>
+<script>
+  const canvas = document.getElementById('constellation');
+  const ctx = canvas.getContext('2d');
 
-    # Embed the extracted HTML inside a fixed div
-    components.html(f"""
-        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;">
-            {extracted_html}
-        </div>
-    """, height=0, scrolling=False)
-else:
-    st.error("❌ Background HTML file `rex2.html` not found. Please ensure it's in the project directory.")
+  let width = canvas.width = window.innerWidth;
+  let height = canvas.height = window.innerHeight;
 
-# Streamlit UI Content
+  const dots = [];
+  const dotCount = 100;
+  const maxDist = 150;
+  const mouseRadius = 200;
+  let mouse = { x: null, y: null };
+
+  // Create dots
+  for (let i = 0; i < dotCount; i++) {
+    dots.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5
+    });
+  }
+
+  // Mouse move event
+  canvas.addEventListener('mousemove', function (e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  // Resize event
+  window.addEventListener('resize', function () {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  });
+
+  // Draw function
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw dots
+    for (let dot of dots) {
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+    }
+
+    // Connect dots near the mouse
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        let dx = dots[i].x - dots[j].x;
+        let dy = dots[i].y - dots[j].y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+
+        let mouseDx = dots[i].x - mouse.x;
+        let mouseDy = dots[i].y - mouse.y;
+        let mouseDistance = Math.sqrt(mouseDx * mouseDx + mouseDy * mouseDy);
+
+        if (distance < maxDist && mouseDistance < mouseRadius) {
+          ctx.beginPath();
+          ctx.moveTo(dots[i].x, dots[i].y);
+          ctx.lineTo(dots[j].x, dots[j].y);
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Move dots
+    for (let dot of dots) {
+      dot.x += dot.vx;
+      dot.y += dot.vy;
+
+      // Bounce off walls
+      if (dot.x <= 0 || dot.x >= width) dot.vx *= -1;
+      if (dot.y <= 0 || dot.y >= height) dot.vy *= -1;
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+</script>
+</body>
+</html>
+"""
+
+# Inject HTML into Streamlit (as a fixed background)
+components.html(html_code, height=0, width=0)
 
 
 # API Key
